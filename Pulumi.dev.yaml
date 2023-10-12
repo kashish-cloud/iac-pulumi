@@ -1,3 +1,7 @@
 encryptionsalt: v1:NhyTm7Jz9Dw=:v1:UJywrKL4qYLTgZ0E:82wt+zO3d2BmYL4yY8qwX8wi1vRndw==
 config:
   aws:region: us-east-1
+  config.dev.yaml:subnetBaseCidrBlock: "10.0"
+  config.dev.yaml:vpcCidrBlock: 10.0.0.0/16
+  iac-pulumi:subnetBaseCidrBlock: "10.0"
+  iac-pulumi:vpcCidrBlock: 10.0.0.0/16
