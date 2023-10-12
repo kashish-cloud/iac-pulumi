@@ -1,13 +1,16 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-const config = new pulumi.Config();
+const config = new pulumi.Config("config.dev.yaml");
+const vpcCidrBlock = config.require("vpcCidrBlock");
+const subnetBaseCidrBlock = config.require("subnetBaseCidrBlock");
+
 const region = aws.config.region;
 const azs = pulumi.all([region, aws.getAvailabilityZones()]).apply(([region, azs]) => azs.names);
 
 // Create a VPC
 const vpc = new aws.ec2.Vpc("myVpc", { 
-    cidrBlock: "10.0.0.0/16",
+    cidrBlock: vpcCidrBlock,
     tags: {
         Name: "My VPC"
     }
@@ -29,11 +32,14 @@ new aws.ec2.Route("publicRoute", {
 // Create a private Route Table
 const privateRT = new aws.ec2.RouteTable("privateRT", { vpcId: vpc.id });
 
+// Determine how many subnets to create based on the number of availability zones in the region
+const numSubnets = azs.apply(azs => azs.length <= 3 ? azs.length : 3);
+
 // Create 3 public and 3 private subnets, each in a different AZ
 for (let i = 0; i < 3; i++) {
     new aws.ec2.Subnet(`publicSubnet${i}`, { 
         vpcId: vpc.id, 
-        cidrBlock: `10.0.${i}.0/24`,
+        cidrBlock: `${subnetBaseCidrBlock}.${i}.0/24`,
         mapPublicIpOnLaunch: true, 
         availabilityZone: azs[i],
         tags: {
@@ -43,7 +49,7 @@ for (let i = 0; i < 3; i++) {
 
     new aws.ec2.Subnet(`privateSubnet${i}`, { 
         vpcId: vpc.id, 
-        cidrBlock: `10.0.${i+3}.0/24`, 
+        cidrBlock: `${subnetBaseCidrBlock}.${i+3}.0/24`, 
         availabilityZone: azs[i+3],
         tags: {
             Name: `privateSubnet${i}`

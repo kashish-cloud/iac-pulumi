@@ -1,0 +1,3 @@
+config:
+  vpcCidrBlock: "10.0.0.0/16"
+  subnetBaseCidrBlock: "10.0"
