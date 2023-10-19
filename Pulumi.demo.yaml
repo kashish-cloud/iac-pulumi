@@ -1,4 +1,4 @@
-encryptionsalt: v1:mNG/xx+Atvw=:v1:KHkv8Ir+0b00NYN5:uoUGbOBozfceXC6Ht1bNklpGNDtqWQ==
+encryptionsalt: v1:VdcX4QPIm/s=:v1:07wwsnfDQVbiBhFN:I9ZFk8r69AwIY9GtRUsK5+Is4Mg9Ww==
 config:
   aws:region: us-east-1
   config.dev.yaml:subnetBaseCidrBlock: "10.0"
