@@ -1,7 +1,6 @@
 encryptionsalt: v1:mNG/xx+Atvw=:v1:KHkv8Ir+0b00NYN5:uoUGbOBozfceXC6Ht1bNklpGNDtqWQ==
 config:
+  aws:profile: dev
   aws:region: us-east-1
-  config.dev.yaml:subnetBaseCidrBlock: "10.0"
-  config.dev.yaml:vpcCidrBlock: 10.0.0.0/16
-  iac-pulumi:subnetBaseCidrBlock: "10.0"
-  iac-pulumi:vpcCidrBlock: 10.0.0.0/16
+  pulumi-infra:subnetBaseCidrBlock: "10.0"
+  pulumi-infra:vpcCidrBlock: 10.0.0.0/16
