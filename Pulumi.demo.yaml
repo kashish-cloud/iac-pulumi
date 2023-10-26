@@ -2,5 +2,9 @@ encryptionsalt: v1:ZqEQUwHbx/I=:v1:GMarh8mCDzwl4Hk0:9awznzqOQ1C0nP05AGvltCDI7bwT
 config:
   aws:profile: demo
   aws:region: us-east-1
+  pulumi-infra:APPPORT: "8080"
+  pulumi-infra:DBNAME: kashishdesai
+  pulumi-infra:DBPORT: "5432"
+  pulumi-infra:DIALECT: postgres
   pulumi-infra:subnetBaseCidrBlock: "10.0"
   pulumi-infra:vpcCidrBlock: 10.0.0.0/16
