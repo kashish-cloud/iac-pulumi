@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import { Role } from "@pulumi/aws/iam";
 
 const config = new pulumi.Config();
 const vpcCidrBlock = config.require("vpcCidrBlock");
@@ -210,23 +211,81 @@ aws.getAvailabilityZones().then(azs => {
         } 
     });
 
+    // Define the IAM policy in JSON format
+    const cloudWatchPolicy = {
+        Version: "2012-10-17",
+        Statement: [
+            {
+                Sid: "VisualEditor0",
+                Effect: "Allow",
+                Action: [
+                    "cloudwatch:PutMetricData",
+                    "cloudwatch:GetMetricStatistics",
+                    "cloudwatch:GetMetricData",
+                    "cloudwatch:GetInsightRuleReport",
+                    "cloudwatch:ListMetrics",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams",
+                    "logs:DescribeLogGroups",
+                    "iam:CreateInstanceProfile",
+                    "iam:AddRoleToInstanceProfile"
+                ],
+                Resource: "*"
+            }
+        ]
+    };
+
+    // Create an IAM policy
+    const cloudWatchIAMPolicy = new aws.iam.Policy("cloudwatch-policy", {
+        policy: JSON.stringify(cloudWatchPolicy)
+    });
+
+    // Create an IAM role
+    const ec2Role = new aws.iam.Role("ec2-role", {
+        assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
+            Service: "ec2.amazonaws.com"
+        })
+    });
+
+    // Attach the IAM policy to the IAM role
+    const attachment = new aws.iam.RolePolicyAttachment("ec2-cloudwatch-policy-attachment", {
+        policyArn: cloudWatchIAMPolicy.arn,
+        role: ec2Role.name
+    });
+
+    const instanceProfile = new aws.iam.InstanceProfile("instanceProfile", {
+        role: ec2Role.name
+    });
+
     // Create EC2 Instance
     const appEc2InstanceUserData = new aws.ec2.Instance("app-instance", {
         instanceType: "t2.micro",
         keyName: "awsKey",
         ami: amiId,
         vpcSecurityGroupIds: [applicationSecurityGroup.id],
+        iamInstanceProfile: instanceProfile.name,
         subnetId: publicSubnets[0],
-        userData: pulumi.all([dbInstance.endpoint, dbInstance.username, dbInstance.password]).apply(([host, user, pass]) => {
+        userData: pulumi.all([dbInstance.endpoint, dbInstance.username, dbInstance.password]).apply(([endpoint, user, pass]) => {
+            const host = endpoint.split(':')[0];
             return `#!/bin/bash
                 echo DIALECT=${config.get("DIALECT")} >> /etc/environment
                 echo DBNAME=${config.get("DBNAME")} >> /etc/environment
                 echo DBHOST=${host} >> /etc/environment
-                echo APPPORT=${config.get("APPPORT")} >> /etc/environment
                 echo DBUSER=${user} >> /etc/environment
                 echo DBPASSWORD=${pass} >> /etc/environment
                 echo DBPORT=${config.get("DBPORT")} >> /etc/environment
                 sudo systemctl daemon-reload
+                sudo systemctl enable amazon-cloudwatch-agent
+                sudo systemctl start amazon-cloudwatch-agent
+                sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+                -a fetch-config \
+                -m ec2 \
+                -c file:/opt/webapp/cloudwatch-config.json \
+                -s
+                sudo systemctl enable webapp
+                sudo systemctl start webapp
+                sudo systemctl restart webapp
+                sudo systemctl restart amazon-cloudwatch-agent
             `;
         }),
         ebsBlockDevices: [{
@@ -237,15 +296,32 @@ aws.getAvailabilityZones().then(azs => {
         }],
         disableApiTermination: false,
         availabilityZone: azsData.then(azs => azs.names[0]),
-        });
+    });
 
-    // EC2 instance creation with userdata
-    /*const appEc2InstanceUserData = new aws.ec2.Instance("app-instance", { 
-        // previous EC2 instance details omitted for brevity
-        userData: `#!/bin/bash
-        echo DATABASE_HOST=${dbInstance.endpoint} >> /etc/environment
-        echo DATABASE_USER=${dbInstance.username} >> /etc/environment
-        echo DATABASE_PASSWORD=${dbInstance.password} >> /etc/environment
-        `,
-    });*/
+    // Create Route 53 A Record for the Root Domain
+    const domainARecord = new aws.route53.Record("domainARecord", {
+        name: "kashishdesai.me",
+        type: "A",
+        ttl: 172800,
+        records: [appEc2InstanceUserData.publicIp],
+        zoneId: "Z051440317UG0M71MS6NS",  // Replace with your root domain hosted zone ID
+    });
+
+    // Create Route 53 A Record for the Subdomain
+    const devSubdomainARecord = new aws.route53.Record("devSubdomainARecord", {
+        name: "dev.kashishdesai.me",
+        type: "A",
+        ttl: 60,
+        records: [appEc2InstanceUserData.publicIp],
+        zoneId: "Z0578799VJZFR4ZHSSE7",  // Replace with your subdomain hosted zone ID
+    });
+
+    // Create Route 53 A Record for the Subdomain
+    const demoSubdomainARecord = new aws.route53.Record("demoSubdomainARecord", {
+        name: "demo.kashishdesai.me",
+        type: "A",
+        ttl: 60,
+        records: [appEc2InstanceUserData.publicIp],
+        zoneId: "Z05151961GRM7FVUTZ0CU",  // Replace with your subdomain hosted zone ID
+    });
 });
