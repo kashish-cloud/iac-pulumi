@@ -3,7 +3,7 @@ config:
   aws:profile: demo
   aws:region: us-east-1
   pulumi-infra:APPPORT: "8080"
-  pulumi-infra:DBNAME: kashishdesai
+  pulumi-infra:DBNAME: "csye6225"
   pulumi-infra:DBPORT: "5432"
   pulumi-infra:DIALECT: postgres
   pulumi-infra:subnetBaseCidrBlock: "10.0"
