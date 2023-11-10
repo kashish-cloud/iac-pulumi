@@ -122,7 +122,15 @@ aws.getAvailabilityZones().then(azs => {
         { protocol: "tcp", fromPort: 80, toPort: 80, cidrBlocks: ["0.0.0.0/0"] },
         { protocol: "tcp", fromPort: 443, toPort: 443, cidrBlocks: ["0.0.0.0/0"] },
         { protocol: "tcp", fromPort: 8080, toPort: 8080, cidrBlocks: ["0.0.0.0/0"] },
-    ]
+    ],
+    egress: [
+        {
+            protocol: "-1", // Indicates all protocols
+            fromPort: 0,     // Start of port range (0 means all ports)
+            toPort: 0,       // End of port range (0 means all ports)
+            cidrBlocks: ["0.0.0.0/0"] // Allow traffic to all IP addresses
+        }
+    ]    
     });
 
     const ami = aws.ec2.getAmi({
@@ -142,24 +150,6 @@ aws.getAvailabilityZones().then(azs => {
     console.log(ami)
     const amiId = ami.then(result => result.id);
 
-
-    // Create EC2 Instance
-    /*const appEc2Instance = new aws.ec2.Instance("app-instance", {
-    instanceType: "t2.micro",
-    keyName: "awsKey",
-    ami: amiId,
-    vpcSecurityGroupIds: [applicationSecurityGroup.id],
-    subnetId: publicSubnets[0],
-    ebsBlockDevices: [{
-        deviceName: "/dev/xvda",
-        volumeSize: 25,
-        volumeType: "gp2",
-        deleteOnTermination: true,
-    }],
-    disableApiTermination: false,
-    availabilityZone: azsData.then(azs => azs.names[0]),
-    });*/
-
     // RDS Database SecurityGroup creation
     const databaseSecurityGroup = new aws.ec2.SecurityGroup("database", {
         vpcId: vpc.id,
@@ -168,7 +158,15 @@ aws.getAvailabilityZones().then(azs => {
             fromPort: 5432, // port for PostgreSQL
             toPort: 5432, // similarly, port for PostgreSQL
             securityGroups: [applicationSecurityGroup.id]  // references the security group of the application
-        }]
+        }],
+        egress: [
+            {
+                protocol: "-1", // Indicates all protocols
+                fromPort: 0,     // Start of port range (0 means all ports)
+                toPort: 0,       // End of port range (0 means all ports)
+                cidrBlocks: ["0.0.0.0/0"] // Allow traffic to all IP addresses
+            }
+        ]        
     });
 
     // RDS Parameter Group creation
@@ -270,7 +268,7 @@ aws.getAvailabilityZones().then(azs => {
             return `#!/bin/bash
                 echo DIALECT=${config.get("DIALECT")} >> /etc/environment
                 echo DBNAME=${config.get("DBNAME")} >> /etc/environment
-                echo DBHOST=${host} >> /etc/environment
+                echo PORT=${host} >> /etc/environment
                 echo DBUSER=${user} >> /etc/environment
                 echo DBPASSWORD=${pass} >> /etc/environment
                 echo DBPORT=${config.get("DBPORT")} >> /etc/environment
@@ -280,7 +278,7 @@ aws.getAvailabilityZones().then(azs => {
                 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
                 -a fetch-config \
                 -m ec2 \
-                -c file:/opt/webapp/cloudwatch-config.json \
+                -c file:/opt/cloudwatch-config.json \
                 -s
                 sudo systemctl enable webapp
                 sudo systemctl start webapp
@@ -299,7 +297,7 @@ aws.getAvailabilityZones().then(azs => {
     });
 
     // Create Route 53 A Record for the Root Domain
-    const domainARecord = new aws.route53.Record("domainARecord", {
+    /*const domainARecord = new aws.route53.Record("domainARecord", {
         name: "kashishdesai.me",
         type: "A",
         ttl: 172800,
@@ -314,7 +312,7 @@ aws.getAvailabilityZones().then(azs => {
         ttl: 60,
         records: [appEc2InstanceUserData.publicIp],
         zoneId: "Z0578799VJZFR4ZHSSE7",  // Replace with your subdomain hosted zone ID
-    });
+    });*/
 
     // Create Route 53 A Record for the Subdomain
     const demoSubdomainARecord = new aws.route53.Record("demoSubdomainARecord", {
