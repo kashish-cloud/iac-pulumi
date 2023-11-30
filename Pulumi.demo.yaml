@@ -2,9 +2,12 @@ encryptionsalt: v1:ZqEQUwHbx/I=:v1:GMarh8mCDzwl4Hk0:9awznzqOQ1C0nP05AGvltCDI7bwT
 config:
   aws:profile: demo
   aws:region: us-east-1
+  gcp:project: demoproject-406323
   pulumi-infra:APPPORT: "8080"
   pulumi-infra:DBNAME: "csye6225"
   pulumi-infra:DBPORT: "5432"
   pulumi-infra:DIALECT: postgres
   pulumi-infra:subnetBaseCidrBlock: "10.0"
   pulumi-infra:vpcCidrBlock: 10.0.0.0/16
+  MAILGUN_API_KEY: "0577fba6e7a3cc29ad9695ec7492de17-30b58138-40572cd1"
+  MAILGUN_DOMAIN: "kashishdesai.me"

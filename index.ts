@@ -2,6 +2,9 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { Role } from "@pulumi/aws/iam";
 import { Ipv4 } from "@pulumi/aws/alb";
+import * as sns from "@pulumi/aws/sns";
+import * as snsSubscriptions from "@pulumi/aws/sns";
+import * as gcp from "@pulumi/gcp";
 
 const config = new pulumi.Config();
 const vpcCidrBlock = config.require("vpcCidrBlock");
@@ -248,7 +251,8 @@ aws.getAvailabilityZones().then(azs => {
                     "logs:DescribeLogStreams",
                     "logs:DescribeLogGroups",
                     "iam:CreateInstanceProfile",
-                    "iam:AddRoleToInstanceProfile"
+                    "iam:AddRoleToInstanceProfile",
+                    "sns:Publish"
                 ],
                 Resource: "*"
             }
@@ -277,8 +281,14 @@ aws.getAvailabilityZones().then(azs => {
         role: ec2Role.name
     });
 
-    const userDataTemplate= pulumi.all([dbInstance.endpoint, dbInstance.username, dbInstance.password]).apply(([endpoint, user, pass]) => {
+    // Create SNS topic
+    const snsTopic = new aws.sns.Topic("mySNSTopic", {
+        displayName: "My SNS Topic",
+    });
+
+    const userDataTemplate= pulumi.all([dbInstance.endpoint, dbInstance.username, dbInstance.password, snsTopic.arn]).apply(([endpoint, user, pass, snsTopicArn]) => {
         const host = endpoint.split(':')[0];
+        const region = aws.config.requireRegion();
         return `#!/bin/bash
             echo DIALECT=${config.get("DIALECT")} >> /etc/environment
             echo DBNAME=${config.get("DBNAME")} >> /etc/environment
@@ -286,6 +296,10 @@ aws.getAvailabilityZones().then(azs => {
             echo DBUSER=${user} >> /etc/environment
             echo DBPASSWORD=${pass} >> /etc/environment
             echo DBPORT=${config.get("DBPORT")} >> /etc/environment
+            echo TopicArn=${snsTopicArn} >> /etc/environment
+            echo TopicArn=${snsTopicArn} >> /opt/.env
+            echo AWS_REGION=${region} >> /etc/environment
+            echo AWS_REGION=${region} >> /opt/.env
             sudo systemctl daemon-reload
             sudo systemctl enable amazon-cloudwatch-agent
             sudo systemctl start amazon-cloudwatch-agent
@@ -463,5 +477,162 @@ aws.getAvailabilityZones().then(azs => {
               evaluateTargetHealth: true,
             },
           ],
+    });
+
+    const bucketArgs: gcp.storage.BucketArgs = {
+        location: "US",
+        storageClass: "STANDARD",
+        versioning: {
+            enabled: true,
+        },
+        logging: {
+            logBucket: "my-log-bucket"
+        },
+        labels: {
+            "environment": "production",
+        },
+        uniformBucketLevelAccess: true,
+        forceDestroy: true,
+    };
+    
+    // Create a GCP Bucket
+    const bucket = new gcp.storage.Bucket("my-bucket", bucketArgs);
+    
+    // Create a Service Account
+    const serviceAccount = new gcp.serviceaccount.Account("my-account", {
+        accountId: "myserviceaccount",
+        displayName: "My Service Account",
+    });
+    
+    // Create an Access Key for the Service Account
+    const accessKey = new gcp.serviceaccount.Key("my-account-key", {
+        serviceAccountId: serviceAccount.name,
+        
+    });
+
+    const privateKey = accessKey.privateKey.apply(value => {
+        // 'value' is the resolved value of the Output
+        return value;
+    });
+    
+    // Print the private key
+    privateKey.apply(privateKey => {
+        console.log("Access Key Private Key:", privateKey);
+    });
+    
+    // Create a DynamoDB table
+    const dynamoDbTable = new aws.dynamodb.Table("my-table", {
+        attributes: [{
+          name: "id",
+          type: "S",
+        }],
+        hashKey: "id",
+        readCapacity: 5,
+        writeCapacity: 5,
+    });
+    
+    // Create an IAM role for Lambda
+    const lambdaRole = new aws.iam.Role("lambdaRole", { 
+        assumeRolePolicy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [{
+                Action: "sts:AssumeRole",
+                Effect: "Allow",
+                Sid: "",
+                Principal: {
+                    Service: "lambda.amazonaws.com",
+                },
+            }],
+        }),
+    });
+    
+    // Define a custom IAM policy for CloudWatch Logs
+    const cloudwatchLogsPolicy = new aws.iam.Policy("cloudwatchLogsPolicy", {
+        description: "Policy for CloudWatch Logs",
+        policy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [{
+                Action: [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                ],
+                Effect: "Allow",
+                Resource: "*",
+            }],
+        }),
+    });
+    
+    // Attach the custom CloudWatch Logs policy to the Lambda role
+    const lambdaCloudwatchLogsPolicy = new aws.iam.RolePolicyAttachment("lambdaCloudwatchLogsPolicy", {
+        role: lambdaRole.name,
+        policyArn: cloudwatchLogsPolicy.arn,
+    });
+    
+    // Attach Policy to the role
+    new aws.iam.RolePolicyAttachment("lambdaFullAccess", {
+        role: lambdaRole.name,
+        policyArn: "arn:aws:iam::475039881460:policy/AWSLambdaFullAccess"
+    });
+    
+    // Define the policy for the role
+    const lambdaRolePolicy = new aws.iam.Policy("lambdaRolePolicy", {
+        policy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [{
+                Action: ["sns:Subscribe", "sns:Receive", "sns:Publish", "ses:SendRawEmail", "dynamodb:PutItem"],
+                Effect: "Allow",
+                Resource: "*",
+            }],
+        }),
+    });
+    
+    // Attach the policy to the role
+    new aws.iam.RolePolicyAttachment("lambdaRolePolicyAttachment", {
+        role: lambdaRole.name,
+        policyArn: lambdaRolePolicy.arn,
+    });
+
+    const mailgunApiKey = config.requireSecret("MAILGUN_API_KEY");
+    const mailgunDomain = config.requireSecret("MAILGUN_DOMAIN");
+    
+    // Create AWS Lambda function
+    const lambda = new aws.lambda.Function("mylambda", {
+        runtime: "nodejs18.x",
+        role: lambdaRole.arn,
+        code: new pulumi.asset.FileArchive("/Users/kashishdesai/serverless"),
+        handler: "index.handler",
+        environment: {
+            variables: {
+                BUCKET_NAME: bucket.name,
+                ACCESS_KEY: privateKey,
+                DYNAMODB_TABLE: dynamoDbTable.name,
+                MAILGUN_API_KEY: mailgunApiKey,
+                MAILGUN_DOMAIN: mailgunDomain,
+            },
+        },
+        publish: true,
+    });
+    
+    
+    const emailSubscription = new aws.sns.TopicSubscription("myEmailSubscription", {
+        protocol: "email",
+        endpoint: "kashishdesai03@gmail.com",  
+        topic: snsTopic.arn,          
+    });
+    
+    // Lambda function subscribes to SNS topic
+    new aws.sns.TopicSubscription("lambdaSubscription", {
+        topic: snsTopic,
+        protocol: "lambda",
+        endpoint: lambda.arn,
+    });
+    
+    // Add Lambda permission for SNS
+    new aws.lambda.Permission("sns", {
+        action: "lambda:InvokeFunction",
+        function: lambda,
+        principal: "sns.amazonaws.com",
+        sourceArn: snsTopic.arn,
     });
 });
