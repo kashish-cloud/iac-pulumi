@@ -356,6 +356,7 @@ aws.getAvailabilityZones().then(azs => {
 
     const loadbalancer = new aws.lb.LoadBalancer("webAppLB", {
         name: "csye6225-lb",
+        enableHttp2: true,
         internal: false,
         loadBalancerType: "application",
         securityGroups: [loadBalancerSecurityGroup.id],
@@ -388,8 +389,10 @@ aws.getAvailabilityZones().then(azs => {
 
     const listener = new aws.lb.Listener("webAppListener", {
         loadBalancerArn: loadbalancer.arn,
-        port: 80,
-        protocol: "HTTP",
+        port: 443,
+        protocol: "HTTPS",
+        sslPolicy: "ELBSecurityPolicy-2016-08",
+        certificateArn: "arn:aws:acm:us-east-1:475039881460:certificate/eb043c97-5708-4ef5-b1e1-b54590bcfee8",
         defaultActions: [
           {
             type: "forward",
@@ -400,6 +403,7 @@ aws.getAvailabilityZones().then(azs => {
 
     //Setup Auto Scaling Group
     const autoScalingGroup = new aws.autoscaling.Group("myAutoScalingGroup", {
+        name: "csye6225_asg",
         vpcZoneIdentifiers: publicSubnets,
         launchTemplate: {
             id: launchTemplate.id,
@@ -503,21 +507,24 @@ aws.getAvailabilityZones().then(azs => {
         accountId: "myserviceaccount",
         displayName: "My Service Account",
     });
+
+    // Grant storage.objectCreator role to the service account on the bucket
+    const bucketIAMBinding = new gcp.storage.BucketIAMBinding("bucket-bindings", {
+        bucket: bucket.name,
+        members: [serviceAccount.email.apply(email => `serviceAccount:${email}`)],
+        role: "roles/storage.objectCreator",
+    });
+
+    const bucketIAMBindingAdmin = new gcp.storage.BucketIAMBinding("bucket-bindings-admin", {
+        bucket: bucket.name,
+        members: [serviceAccount.email.apply(email => `serviceAccount:${email}`)],
+        role: "roles/storage.objectAdmin",  // This role includes storage.objects.delete permission
+    });
     
     // Create an Access Key for the Service Account
     const accessKey = new gcp.serviceaccount.Key("my-account-key", {
         serviceAccountId: serviceAccount.name,
         
-    });
-
-    const privateKey = accessKey.privateKey.apply(value => {
-        // 'value' is the resolved value of the Output
-        return value;
-    });
-    
-    // Print the private key
-    privateKey.apply(privateKey => {
-        console.log("Access Key Private Key:", privateKey);
     });
     
     // Create a DynamoDB table
@@ -605,7 +612,7 @@ aws.getAvailabilityZones().then(azs => {
         environment: {
             variables: {
                 BUCKET_NAME: bucket.name,
-                ACCESS_KEY: privateKey,
+                ACCESS_KEY: accessKey.privateKey,
                 DYNAMODB_TABLE: dynamoDbTable.name,
                 MAILGUN_API_KEY: mailgunApiKey,
                 MAILGUN_DOMAIN: mailgunDomain,

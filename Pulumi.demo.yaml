@@ -7,7 +7,9 @@ config:
   pulumi-infra:DBNAME: "csye6225"
   pulumi-infra:DBPORT: "5432"
   pulumi-infra:DIALECT: postgres
+  pulumi-infra:MAILGUN_API_KEY:
+    secure: v1:ZNhpxA92Do8P3Gf3:7Gch208iwuOnaiBTAIxLQ1hRyGZiMOo8Q47AJtBJmiB/D02V4BhAZoRLPL61/OSdtrncGmiWOvH9iBCTlLlMcsoT
+  pulumi-infra:MAILGUN_DOMAIN:
+    secure: v1:OfI327MnotfFqRFt:L4BDNAzMmALGgkbAuRB0U+59N+IVGBmNO/wQ8Gk0FQ==
   pulumi-infra:subnetBaseCidrBlock: "10.0"
   pulumi-infra:vpcCidrBlock: 10.0.0.0/16
-  MAILGUN_API_KEY: "0577fba6e7a3cc29ad9695ec7492de17-30b58138-40572cd1"
-  MAILGUN_DOMAIN: "kashishdesai.me"
