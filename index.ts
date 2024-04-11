@@ -12,7 +12,6 @@ const subnetBaseCidrBlock = config.require("subnetBaseCidrBlock");
 
 const azsData = aws.getAvailabilityZones();
 
-// Create a VPC
 const vpc = new aws.ec2.Vpc("myVpc", { 
     cidrBlock: vpcCidrBlock,
     tags: {
