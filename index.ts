@@ -10,7 +10,6 @@ const config = new pulumi.Config();
 const vpcCidrBlock = config.require("vpcCidrBlock");
 const subnetBaseCidrBlock = config.require("subnetBaseCidrBlock");
 
-// Get data about the current availability zones
 const azsData = aws.getAvailabilityZones();
 
 // Create a VPC
